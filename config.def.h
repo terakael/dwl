@@ -6,11 +6,17 @@
 /* appearance */
 static const int sloppyfocus               = 1;  /* focus follows mouse */
 static const int bypass_surface_visibility = 0;  /* 1 means idle inhibitors will disable idle tracking even if it's surface isn't visible  */
-static const unsigned int borderpx         = 1;  /* border pixel of windows */
+static const int smartgaps                 = 1;  /* 1 means no outer gap when there is only one window */
+static const int monoclegaps               = 1;  /* 1 means outer gaps in monocle layout */
+static const unsigned int gappih           = 10; /* horiz inner gap between windows */
+static const unsigned int gappiv           = 10; /* vert inner gap between windows */
+static const unsigned int gappoh           = 10; /* horiz outer gap between windows and screen edge */
+static const unsigned int gappov           = 10; /* vert outer gap between windows and screen edge */
+static const unsigned int borderpx         = 3;  /* border pixel of windows */
 static const unsigned int snap             = 32; /* snap pixel */
 static const float rootcolor[]             = COLOR(0x222222ff);
-static const float bordercolor[]           = COLOR(0x444444ff);
-static const float focuscolor[]            = COLOR(0x005577ff);
+static const float bordercolor[]           = COLOR(0x25232201);
+static const float focuscolor[]            = COLOR(0x96ad73ff);
 static const float urgentcolor[]           = COLOR(0xff0000ff);
 /* This conforms to the xdg-protocol. Set the alpha to zero to restore the old behavior */
 static const float fullscreen_bg[]         = {0.0f, 0.0f, 0.0f, 1.0f}; /* You can also use glsl colors */
@@ -31,9 +37,10 @@ static const Rule rules[] = {
 /* layout(s) */
 static const Layout layouts[] = {
 	/* symbol     arrange function */
-	{ "[]=",      tile },
-	{ "><>",      NULL },    /* no layout function means floating behavior */
-	{ "[M]",      monocle },
+	// { "[]=",      tile },
+	// { "><>",      NULL },    /* no layout function means floating behavior */
+	// { "[M]",      monocle },
+	{ "[\\]",     dwindle },
 };
 
 /* monitors */
@@ -104,7 +111,7 @@ LIBINPUT_CONFIG_TAP_MAP_LMR -- 1/2/3 finger tap maps to left/middle/right
 static const enum libinput_config_tap_button_map button_map = LIBINPUT_CONFIG_TAP_MAP_LRM;
 
 /* If you want to use the windows key for MODKEY, use WLR_MODIFIER_LOGO */
-#define MODKEY WLR_MODIFIER_ALT
+#define MODKEY WLR_MODIFIER_LOGO
 
 #define TAGKEYS(KEY,TAG) \
 	{ MODKEY,                    KEY,            view,            {.ui = 1 << TAG} }, \
@@ -116,34 +123,61 @@ static const enum libinput_config_tap_button_map button_map = LIBINPUT_CONFIG_TA
 #define SHCMD(cmd) { .v = (const char*[]){ "/bin/sh", "-c", cmd, NULL } }
 
 /* commands */
-static const char *termcmd[] = { "foot", NULL };
-static const char *menucmd[] = { "wmenu-run", NULL };
+static const char *termcmd[] = { "footclient", "tmux", "-u", "new", "-A", "-s", "main", NULL };
+static const char *menucmd[] = { "fuzzel", NULL };
+static const char *filecmd[] = { "nautilus", NULL };
+static const char *browsercmd[] = { "zen-browser", NULL };
+static const char *browserprivcmd[] = { "zen-browser", "--private-window", NULL };
 
 static const Key keys[] = {
 	/* modifier                  key                  function          argument */
-	{ MODKEY,                    XKB_KEY_p,           spawn,            {.v = menucmd} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Return,      spawn,            {.v = termcmd} },
-	{ MODKEY,                    XKB_KEY_j,           focusstack,       {.i = +1} },
-	{ MODKEY,                    XKB_KEY_k,           focusstack,       {.i = -1} },
+	{ MODKEY,                    XKB_KEY_space,       spawn,            {.v = menucmd} },
+	{ MODKEY,                    XKB_KEY_Return,      spawn,            {.v = termcmd} },
+	{ MODKEY,                    XKB_KEY_e,           spawn,            {.v = filecmd} },
+	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_b,           spawn,            {.v = browsercmd} },
+	{ MODKEY|WLR_MODIFIER_SHIFT|WLR_MODIFIER_CTRL, XKB_KEY_b,           spawn,            {.v = browserprivcmd} },
+	// { MODKEY,                    XKB_KEY_j,           focusstack,       {.i = +1} },
+	// { MODKEY,                    XKB_KEY_k,           focusstack,       {.i = -1} },
+	{ MODKEY,                    XKB_KEY_h,           focusdir,         {.ui = 0} },
+	{ MODKEY,                    XKB_KEY_l,           focusdir,         {.ui = 1} },
+	{ MODKEY,                    XKB_KEY_k,           focusdir,         {.ui = 2} },
+	{ MODKEY,                    XKB_KEY_j,           focusdir,         {.ui = 3} },
 	{ MODKEY,                    XKB_KEY_i,           incnmaster,       {.i = +1} },
 	{ MODKEY,                    XKB_KEY_d,           incnmaster,       {.i = -1} },
-	{ MODKEY,                    XKB_KEY_h,           setmfact,         {.f = -0.05f} },
-	{ MODKEY,                    XKB_KEY_l,           setmfact,         {.f = +0.05f} },
-	{ MODKEY,                    XKB_KEY_Return,      zoom,             {0} },
+	// { MODKEY,                    XKB_KEY_h,           setmfact,         {.f = -0.05f} },
+	// { MODKEY,                    XKB_KEY_l,           setmfact,         {.f = +1.05f} },
+	// { MODKEY|WLR_MODIFIER_ALT,  XKB_KEY_h,           incgaps,          {.i = +1} },
+	// { MODKEY|WLR_MODIFIER_ALT,  XKB_KEY_l,           incgaps,          {.i = -1} },
+	// { MODKEY|WLR_MODIFIER_ALT|WLR_MODIFIER_SHIFT, XKB_KEY_H, incogaps, {.i = +1} },
+	// { MODKEY|WLR_MODIFIER_ALT|WLR_MODIFIER_SHIFT, XKB_KEY_L, incogaps, {.i = -1} },
+	// { MODKEY|WLR_MODIFIER_ALT|WLR_MODIFIER_CTRL, XKB_KEY_h, incigaps, {.i = +1} },
+	// { MODKEY|WLR_MODIFIER_ALT|WLR_MODIFIER_CTRL, XKB_KEY_l, incigaps, {.i = -1} },
+	{ MODKEY|WLR_MODIFIER_ALT,  XKB_KEY_0,           togglegaps,       {0} },
+	{ MODKEY|WLR_MODIFIER_ALT|WLR_MODIFIER_SHIFT, XKB_KEY_parenright, defaultgaps, {0} },
+	// { MODKEY,                    XKB_KEY_y,           incihgaps,        {.i = +1} },
+	// { MODKEY,                    XKB_KEY_o,           incihgaps,        {.i = -1} },
+	// { MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_y,           incivgaps,        {.i = +1} },
+	// { MODKEY|WLR_MODIFIER_CTRL,  XKB_KEY_o,           incivgaps,        {.i = -1} },
+	// { MODKEY|WLR_MODIFIER_ALT,  XKB_KEY_y,           incohgaps,        {.i = +1} },
+	// { MODKEY|WLR_MODIFIER_ALT,  XKB_KEY_o,           incohgaps,        {.i = -1} },
+	// { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_Y,           incovgaps,        {.i = +1} },
+	// { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_O,           incovgaps,        {.i = -1} },
+	{ MODKEY,                    XKB_KEY_z,      zoom,             {0} },
 	{ MODKEY,                    XKB_KEY_Tab,         view,             {0} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_c,           killclient,       {0} },
-	{ MODKEY,                    XKB_KEY_t,           setlayout,        {.v = &layouts[0]} },
-	{ MODKEY,                    XKB_KEY_f,           setlayout,        {.v = &layouts[1]} },
-	{ MODKEY,                    XKB_KEY_m,           setlayout,        {.v = &layouts[2]} },
-	{ MODKEY,                    XKB_KEY_space,       setlayout,        {0} },
+	{ MODKEY,                    XKB_KEY_w,           killclient,       {0} },
+	// { MODKEY,                    XKB_KEY_t,           setlayout,        {.v = &layouts[0]} },
+	// { MODKEY,                    XKB_KEY_f,           setlayout,        {.v = &layouts[1]} },
+	// { MODKEY,                    XKB_KEY_m,           setlayout,        {.v = &layouts[2]} },
+	// { MODKEY,                    XKB_KEY_r,           setlayout,        {.v = &layouts[3]} },
+	// { MODKEY,                    XKB_KEY_space,       setlayout,        {0} },
 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_space,       togglefloating,   {0} },
-	{ MODKEY,                    XKB_KEY_e,           togglefullscreen, {0} },
+	{ MODKEY,                    XKB_KEY_f,           togglefullscreen, {0} },
 	{ MODKEY,                    XKB_KEY_0,           view,             {.ui = ~0} },
 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_0,           tag,              {.ui = ~0} },
-	{ MODKEY,                    XKB_KEY_comma,       focusmon,         {.i = WLR_DIRECTION_LEFT} },
-	{ MODKEY,                    XKB_KEY_period,      focusmon,         {.i = WLR_DIRECTION_RIGHT} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_comma,       tagmon,           {.i = WLR_DIRECTION_LEFT} },
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_period,      tagmon,           {.i = WLR_DIRECTION_RIGHT} },
+	// { MODKEY,                    XKB_KEY_comma,       focusmon,         {.i = WLR_DIRECTION_LEFT} },
+	// { MODKEY,                    XKB_KEY_period,      focusmon,         {.i = WLR_DIRECTION_RIGHT} },
+	// { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_comma,       tagmon,           {.i = WLR_DIRECTION_LEFT} },
+	// { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_period,      tagmon,           {.i = WLR_DIRECTION_RIGHT} },
 	TAGKEYS(                     XKB_KEY_1,           0),
 	TAGKEYS(                     XKB_KEY_2,           1),
 	TAGKEYS(                     XKB_KEY_3,           2),
@@ -153,7 +187,7 @@ static const Key keys[] = {
 	TAGKEYS(                     XKB_KEY_7,           6),
 	TAGKEYS(                     XKB_KEY_8,           7),
 	TAGKEYS(                     XKB_KEY_9,           8),
-	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_q,           quit,             {0} },
+	{ MODKEY, XKB_KEY_Escape,           quit,             {0} },
 
 	/* Ctrl-Alt-Backspace and Ctrl-Alt-Fx used to be handled by X server */
 	{ WLR_MODIFIER_CTRL|WLR_MODIFIER_ALT,XKB_KEY_BackSpace, quit, {0} },
