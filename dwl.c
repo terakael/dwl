@@ -177,6 +177,11 @@ typedef struct {
 } Key;
 
 typedef struct {
+	int mode;
+	Key key;
+} Modekey;
+
+typedef struct {
 	struct wlr_keyboard_group *wlr_group;
 	struct wlr_keyboard *virtual_keyboard;
 
@@ -346,6 +351,8 @@ static void incohgaps(const Arg *arg);
 static void incovgaps(const Arg *arg);
 static void inputdevice(struct wl_listener *listener, void *data);
 static const Key *keybinding(uint32_t mods, xkb_keysym_t sym);
+static const Key *modekeybinding(uint32_t mods, xkb_keysym_t sym);
+static void entermode(const Arg *arg);
 static void keypress(struct wl_listener *listener, void *data);
 static void keypressmod(struct wl_listener *listener, void *data);
 static int keyrepeat(void *data);
@@ -465,6 +472,7 @@ static struct wlr_output_layout *output_layout;
 static struct wlr_box sgeom;
 static struct wl_list mons;
 static Monitor *selmon;
+static int active_mode = -1;
 static int enablegaps = 1;   /* enables gaps, used by togglegaps */
 static int consumed[KEY_MAX + 1];
 
@@ -2097,9 +2105,24 @@ keybinding(uint32_t mods, xkb_keysym_t sym)
 	 * processing.
 	 */
 	const Key *k;
+	if (active_mode >= 0)
+		return modekeybinding(mods, sym);
+
 	for (k = keys; k < END(keys); k++) {
 		if (CLEANMASK(mods) == CLEANMASK(k->mod) && sym == k->keysym && k->func)
 			return k;
+	}
+	return NULL;
+}
+
+const Key *
+modekeybinding(uint32_t mods, xkb_keysym_t sym)
+{
+	const Modekey *mk;
+	for (mk = modekeys; mk < END(modekeys); mk++) {
+		if (mk->mode == active_mode && CLEANMASK(mods) == CLEANMASK(mk->key.mod)
+				&& sym == mk->key.keysym && mk->key.func)
+			return &mk->key;
 	}
 	return NULL;
 }
@@ -2195,6 +2218,18 @@ keyrepeat(void *data)
 	}
 
 	return 0;
+}
+
+void
+entermode(const Arg *arg)
+{
+	if (active_mode == arg->i)
+		return;
+	if (active_mode != NORMAL)
+		onexitmode(active_mode);
+	active_mode = arg->i;
+	if (active_mode != NORMAL)
+		onentermode(active_mode);
 }
 
 void
