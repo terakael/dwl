@@ -382,7 +382,6 @@ static void tag(const Arg *arg);
 static void dwindle(Monitor *m);
 static void togglefloating(const Arg *arg);
 static void togglefullscreen(const Arg *arg);
-static void togglegaps(const Arg *arg);
 static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unlocksession(struct wl_listener *listener, void *data);
@@ -397,7 +396,6 @@ static void virtualpointer(struct wl_listener *listener, void *data);
 static Monitor *xytomon(double x, double y);
 static void xytonode(double x, double y, struct wlr_surface **psurface,
 		Client **pc, LayerSurface **pl, double *nx, double *ny);
-static void zoom(const Arg *arg);
 
 /* variables */
 static pid_t child_pid = -1;
@@ -3183,13 +3181,6 @@ togglefullscreen(const Arg *arg)
 }
 
 void
-togglegaps(const Arg *arg)
-{
-	enablegaps = !enablegaps;
-	arrange(selmon);
-}
-
-void
 toggletag(const Arg *arg)
 {
 	uint32_t newtags;
@@ -3492,39 +3483,6 @@ xytonode(double x, double y, struct wlr_surface **psurface,
 
 	if (psurface) *psurface = surface;
 	toplevel_from_wlr_surface(surface, pc, pl);
-}
-
-void
-zoom(const Arg *arg)
-{
-	Client *c, *sel = focustop(selmon);
-
-	if (!sel || !selmon || !selmon->lt[selmon->sellt]->arrange || sel->isfloating)
-		return;
-
-	/* Search for the first tiled window that is not sel, marking sel as
-	 * NULL if we pass it along the way */
-	wl_list_for_each(c, &clients, link) {
-		if (VISIBLEON(c, selmon) && !c->isfloating) {
-			if (c != sel)
-				break;
-			sel = NULL;
-		}
-	}
-
-	/* Return if no other tiled window was found */
-	if (&c->link == &clients)
-		return;
-
-	/* If we passed sel, move c to the front; otherwise, move sel to the
-	 * front */
-	if (!sel)
-		sel = c;
-	wl_list_remove(&sel->link);
-	wl_list_insert(&clients, &sel->link);
-
-	focusclient(sel, 1);
-	arrange(selmon);
 }
 
 #ifdef XWAYLAND

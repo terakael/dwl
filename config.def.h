@@ -140,8 +140,6 @@ static const Key keys[] = {
 	{ MODKEY,                    XKB_KEY_l,           focusdir,         {.ui = 1} },
 	{ MODKEY,                    XKB_KEY_k,           focusdir,         {.ui = 2} },
 	{ MODKEY,                    XKB_KEY_j,           focusdir,         {.ui = 3} },
-	{ MODKEY|WLR_MODIFIER_ALT,  XKB_KEY_0,           togglegaps,       {0} },
-	{ MODKEY,                    XKB_KEY_z,      zoom,             {0} },
 	{ MODKEY,                    XKB_KEY_Tab,         view,             {0} },
 	{ MODKEY,                    XKB_KEY_w,           killclient,       {0} },
 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_space,       togglefloating,   {0} },
