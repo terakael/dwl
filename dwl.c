@@ -310,7 +310,6 @@ static void createpopup(struct wl_listener *listener, void *data);
 static void cursorconstrain(struct wlr_pointer_constraint_v1 *constraint);
 static void cursorframe(struct wl_listener *listener, void *data);
 static void cursorwarptohint(void);
-static void defaultgaps(const Arg *arg);
 static void destroydecoration(struct wl_listener *listener, void *data);
 static void destroydragicon(struct wl_listener *listener, void *data);
 static void destroyidleinhibitor(struct wl_listener *listener, void *data);
@@ -321,7 +320,6 @@ static void destroynotify(struct wl_listener *listener, void *data);
 static void destroypointerconstraint(struct wl_listener *listener, void *data);
 static void destroysessionlock(struct wl_listener *listener, void *data);
 static void destroykeyboardgroup(struct wl_listener *listener, void *data);
-static Monitor *dirtomon(enum wlr_direction dir);
 static void dwl_ipc_manager_bind(struct wl_client *client, void *data, uint32_t version, uint32_t id);
 static void dwl_ipc_manager_destroy(struct wl_resource *resource);
 static void dwl_ipc_manager_get_output(struct wl_client *client, struct wl_resource *resource, uint32_t id, struct wl_resource *output);
@@ -334,21 +332,12 @@ static void dwl_ipc_output_set_layout(struct wl_client *client, struct wl_resour
 static void dwl_ipc_output_set_tags(struct wl_client *client, struct wl_resource *resource, uint32_t tagmask, uint32_t toggle_tagset);
 static void dwl_ipc_output_release(struct wl_client *client, struct wl_resource *resource);
 static void focusclient(Client *c, int lift);
-static void focusmon(const Arg *arg);
-static void focusstack(const Arg *arg);
 static void focusdir(const Arg *arg);
+static void swapdir(const Arg *arg);
 static Client *focustop(Monitor *m);
 static void fullscreennotify(struct wl_listener *listener, void *data);
 static void gpureset(struct wl_listener *listener, void *data);
 static void handlesig(int signo);
-static void incnmaster(const Arg *arg);
-static void incgaps(const Arg *arg);
-static void incigaps(const Arg *arg);
-static void incihgaps(const Arg *arg);
-static void incivgaps(const Arg *arg);
-static void incogaps(const Arg *arg);
-static void incohgaps(const Arg *arg);
-static void incovgaps(const Arg *arg);
 static void inputdevice(struct wl_listener *listener, void *data);
 static const Key *keybinding(uint32_t mods, xkb_keysym_t sym);
 static const Key *modekeybinding(uint32_t mods, xkb_keysym_t sym);
@@ -360,7 +349,6 @@ static void killclient(const Arg *arg);
 static void locksession(struct wl_listener *listener, void *data);
 static void mapnotify(struct wl_listener *listener, void *data);
 static void maximizenotify(struct wl_listener *listener, void *data);
-static void monocle(Monitor *m);
 static void motionabsolute(struct wl_listener *listener, void *data);
 static void motionnotify(uint32_t time, struct wlr_input_device *device, double sx,
 		double sy, double sx_unaccel, double sy_unaccel);
@@ -384,9 +372,6 @@ static void setcursor(struct wl_listener *listener, void *data);
 static void setcursorshape(struct wl_listener *listener, void *data);
 static void setfloating(Client *c, int floating);
 static void setfullscreen(Client *c, int fullscreen);
-static void setgaps(int oh, int ov, int ih, int iv);
-static void setlayout(const Arg *arg);
-static void setmfact(const Arg *arg);
 static void setmon(Client *c, Monitor *m, uint32_t newtags);
 static void setpsel(struct wl_listener *listener, void *data);
 static void setsel(struct wl_listener *listener, void *data);
@@ -394,8 +379,6 @@ static void setup(void);
 static void spawn(const Arg *arg);
 static void startdrag(struct wl_listener *listener, void *data);
 static void tag(const Arg *arg);
-static void tagmon(const Arg *arg);
-static void tile(Monitor *m);
 static void dwindle(Monitor *m);
 static void togglefloating(const Arg *arg);
 static void togglefullscreen(const Arg *arg);
@@ -1395,12 +1378,6 @@ cursorwarptohint(void)
 }
 
 void
-defaultgaps(const Arg *arg)
-{
-	setgaps(gappoh, gappov, gappih, gappiv);
-}
-
-void
 destroydecoration(struct wl_listener *listener, void *data)
 {
 	Client *c = wl_container_of(listener, c, destroy_decoration);
@@ -1550,23 +1527,6 @@ destroykeyboardgroup(struct wl_listener *listener, void *data)
 	wl_list_remove(&group->destroy.link);
 	wlr_keyboard_group_destroy(group->wlr_group);
 	free(group);
-}
-
-Monitor *
-dirtomon(enum wlr_direction dir)
-{
-	struct wlr_output *next;
-	if (!wlr_output_layout_get(output_layout, selmon->wlr_output))
-		return selmon;
-	if ((next = wlr_output_layout_adjacent_output(output_layout,
-			dir, selmon->wlr_output, selmon->m.x, selmon->m.y)))
-		return next->data;
-	if ((next = wlr_output_layout_farthest_output(output_layout,
-			dir ^ (WLR_DIRECTION_LEFT | WLR_DIRECTION_RIGHT |
-					WLR_DIRECTION_UP | WLR_DIRECTION_DOWN),
-			selmon->wlr_output, selmon->m.x, selmon->m.y)))
-		return next->data;
-	return selmon;
 }
 
 void
@@ -1844,85 +1804,100 @@ focusclient(Client *c, int lift)
 		focused_client = c;
 }
 
-void
-focusmon(const Arg *arg)
+typedef struct {
+	int x;
+	int y;
+} Vector;
+
+static Vector
+position_of_box(const struct wlr_box *box)
 {
-	int i = 0, nmons = wl_list_length(&mons);
-	if (nmons) {
-		do /* don't switch to disabled mons */
-			selmon = dirtomon(arg->i);
-		while (!selmon->wlr_output->enabled && i++ < nmons);
-	}
-	focusclient(focustop(selmon), 1);
+	return (Vector){ .x = box->x + box->width / 2, .y = box->y + box->height / 2 };
 }
 
-void
-focusstack(const Arg *arg)
+static Vector
+diff_of_vectors(Vector a, Vector b)
 {
-	/* Focus the next or previous client (in tiling order) on selmon */
-	Client *c, *sel = focustop(selmon);
-	if (!sel || (sel->isfullscreen && !client_has_children(sel)))
+	return (Vector){ .x = b.x - a.x, .y = b.y - a.y };
+}
+
+static const char *
+direction_of_vector(Vector v)
+{
+	if (v.x == 0 && v.y == 0)
+		return "";
+	if (abs(v.y) > abs(v.x))
+		return v.y > 0 ? "down" : "up";
+	return v.x > 0 ? "right" : "left";
+}
+
+static Client *
+client_in_direction(const char *direction, int skipfloating)
+{
+	Client *sel = focustop(selmon), *c, *target = NULL;
+	Vector spos;
+	double bestdist = INFINITY;
+
+	if (!sel || sel->isfullscreen || (skipfloating && sel->isfloating))
+		return NULL;
+	spos = position_of_box(&sel->geom);
+	wl_list_for_each(c, &clients, link) {
+		Vector diff;
+		double dist;
+		if (c == sel || !VISIBLEON(c, selmon) || (skipfloating && c->isfloating))
+			continue;
+		diff = diff_of_vectors(spos, position_of_box(&c->geom));
+		if (strcmp(direction, direction_of_vector(diff)) != 0)
+			continue;
+		dist = hypot(diff.x, diff.y);
+		if (dist < bestdist) {
+			target = c;
+			bestdist = dist;
+		}
+	}
+	return target;
+}
+
+static void
+swaplist(struct wl_list *a, struct wl_list *b)
+{
+	struct wl_list *ap, *an, *bp, *bn, tmp;
+	if (a == b)
 		return;
-	if (arg->i > 0) {
-		wl_list_for_each(c, &sel->link, link) {
-			if (&c->link == &clients)
-				continue; /* wrap past the sentinel node */
-			if (VISIBLEON(c, selmon))
-				break; /* found it */
-		}
+	ap = a->prev; an = a->next;
+	bp = b->prev; bn = b->next;
+	if (an == b) {
+		ap->next = b; b->prev = ap; b->next = a; a->prev = b; a->next = bn; bn->prev = a;
+	} else if (bn == a) {
+		bp->next = a; a->prev = bp; a->next = b; b->prev = a; b->next = an; an->prev = b;
 	} else {
-		wl_list_for_each_reverse(c, &sel->link, link) {
-			if (&c->link == &clients)
-				continue; /* wrap past the sentinel node */
-			if (VISIBLEON(c, selmon))
-				break; /* found it */
-		}
+		ap->next = b; an->prev = b; bp->next = a; bn->prev = a;
+		tmp = *a; *a = *b; *b = tmp;
 	}
-	/* If only one client is visible on selmon, then c == sel */
-	focusclient(c, 1);
 }
 
-void focusdir(const Arg *arg)
+static const char *directions[] = { "left", "right", "up", "down" };
+
+static void
+focusdir(const Arg *arg)
 {
-	/* Focus the left, right, up, down client relative to the current focused client on selmon */
-  int dist=INT_MAX;
-  Client *c, *sel = focustop(selmon);
-  Client *newsel = NULL;
-  int newdist=INT_MAX;
+	Client *target;
 
-  if (!sel || sel->isfullscreen)
-	  return;
+	if (arg->ui >= LENGTH(directions))
+		return;
+	if ((target = client_in_direction(directions[arg->ui], 0)))
+		focusclient(target, 1);
+}
 
-  wl_list_for_each(c, &clients, link) {
-    if (!VISIBLEON(c, selmon))
-      continue; /* skip non visible windows */
+static void
+swapdir(const Arg *arg)
+{
+	Client *sel = focustop(selmon), *target;
 
-    if (arg->ui == 0 && sel->geom.x <= c->geom.x) {
-      /* Client isn't on our left */
-      continue;
-    }
-    if (arg->ui == 1 && sel->geom.x >= c->geom.x) {
-      /* Client isn't on our right */
-      continue;
-    }
-    if (arg->ui == 2 && sel->geom.y <= c->geom.y) {
-      /* Client isn't above us */
-      continue;
-    }
-    if (arg->ui == 3 && sel->geom.y >= c->geom.y) {
-      /* Client isn't below us */
-      continue;
-    }
-
-    dist=abs(sel->geom.x-c->geom.x)+abs(sel->geom.y-c->geom.y);
-    if (dist < newdist){
-      newdist = dist;
-      newsel=c;
-    }
-  }
-  if (newsel != NULL){
-    focusclient(newsel, 1);
-  }
+	if (arg->ui >= LENGTH(directions) || !(target = client_in_direction(directions[arg->ui], 1)))
+		return;
+	swaplist(&sel->link, &target->link);
+	arrange(selmon);
 }
 
 /* We probably should change the name of this: it sounds like it
@@ -1978,92 +1953,6 @@ handlesig(int signo)
 		while (waitpid(-1, NULL, WNOHANG) > 0);
 	else if (signo == SIGINT || signo == SIGTERM)
 		quit(NULL);
-}
-
-void
-incnmaster(const Arg *arg)
-{
-	if (!arg || !selmon)
-		return;
-	selmon->nmaster = MAX(selmon->nmaster + arg->i, 0);
-	arrange(selmon);
-}
-
-void
-incgaps(const Arg *arg)
-{
-	setgaps(
-		selmon->gappoh + arg->i,
-		selmon->gappov + arg->i,
-		selmon->gappih + arg->i,
-		selmon->gappiv + arg->i
-	);
-}
-
-void
-incigaps(const Arg *arg)
-{
-	setgaps(
-		selmon->gappoh,
-		selmon->gappov,
-		selmon->gappih + arg->i,
-		selmon->gappiv + arg->i
-	);
-}
-
-void
-incihgaps(const Arg *arg)
-{
-	setgaps(
-		selmon->gappoh,
-		selmon->gappov,
-		selmon->gappih + arg->i,
-		selmon->gappiv
-	);
-}
-
-void
-incivgaps(const Arg *arg)
-{
-	setgaps(
-		selmon->gappoh,
-		selmon->gappov,
-		selmon->gappih,
-		selmon->gappiv + arg->i
-	);
-}
-
-void
-incogaps(const Arg *arg)
-{
-	setgaps(
-		selmon->gappoh + arg->i,
-		selmon->gappov + arg->i,
-		selmon->gappih,
-		selmon->gappiv
-	);
-}
-
-void
-incohgaps(const Arg *arg)
-{
-	setgaps(
-		selmon->gappoh + arg->i,
-		selmon->gappov,
-		selmon->gappih,
-		selmon->gappiv
-	);
-}
-
-void
-incovgaps(const Arg *arg)
-{
-	setgaps(
-		selmon->gappoh,
-		selmon->gappov + arg->i,
-		selmon->gappih,
-		selmon->gappiv
-	);
 }
 
 void
@@ -2363,28 +2252,6 @@ maximizenotify(struct wl_listener *listener, void *data)
 			&& wl_resource_get_version(c->surface.xdg->toplevel->resource)
 					< XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION)
 		wlr_xdg_surface_schedule_configure(c->surface.xdg);
-}
-
-void
-monocle(Monitor *m)
-{
-	Client *c;
-	int n = 0;
-
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
-			continue;
-		n++;
-		if (!monoclegaps)
-			resize(c, m->w, 0);
-		else
-			resize(c, (struct wlr_box){.x = m->w.x + gappoh, .y = m->w.y + gappov,
-				.width = m->w.width - 2 * gappoh, .height = m->w.height - 2 * gappov}, 0);
-	}
-	if (n)
-		snprintf(m->ltsymbol, LENGTH(m->ltsymbol), "[%d]", n);
-	if ((c = focustop(m)))
-		wlr_scene_node_raise_to_top(&c->scene->node);
 }
 
 void
@@ -2906,45 +2773,6 @@ setfullscreen(Client *c, int fullscreen)
 }
 
 void
-setgaps(int oh, int ov, int ih, int iv)
-{
-	selmon->gappoh = MAX(oh, 0);
-	selmon->gappov = MAX(ov, 0);
-	selmon->gappih = MAX(ih, 0);
-	selmon->gappiv = MAX(iv, 0);
-	arrange(selmon);
-}
-
-void
-setlayout(const Arg *arg)
-{
-	if (!selmon)
-		return;
-	if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
-		selmon->sellt ^= 1;
-	if (arg && arg->v)
-		selmon->lt[selmon->sellt] = (Layout *)arg->v;
-	strncpy(selmon->ltsymbol, selmon->lt[selmon->sellt]->symbol, LENGTH(selmon->ltsymbol));
-	arrange(selmon);
-	printstatus();
-}
-
-/* arg > 1.0 will set mfact absolutely */
-void
-setmfact(const Arg *arg)
-{
-	float f;
-
-	if (!arg || !selmon || !selmon->lt[selmon->sellt]->arrange)
-		return;
-	f = arg->f < 1.0f ? arg->f + selmon->mfact : arg->f - 1.0f;
-	if (f < 0.1 || f > 0.9)
-		return;
-	selmon->mfact = f;
-	arrange(selmon);
-}
-
-void
 setmon(Client *c, Monitor *m, uint32_t newtags)
 {
 	Monitor *oldmon = c->mon;
@@ -3258,60 +3086,7 @@ tag(const Arg *arg)
 		return;
 
 	sel->tags = arg->ui & TAGMASK;
-	focusclient(focustop(selmon), 1);
-	arrange(selmon);
-	printstatus();
-}
-
-void
-tagmon(const Arg *arg)
-{
-	Client *sel = focustop(selmon);
-	if (sel)
-		setmon(sel, dirtomon(arg->i), 0);
-}
-
-void
-tile(Monitor *m)
-{
-	unsigned int mw, my, ty, h, r, oe = enablegaps, ie = enablegaps;
-	int i, n = 0;
-	Client *c;
-
-	wl_list_for_each(c, &clients, link)
-		if (VISIBLEON(c, m) && !c->isfloating && !c->isfullscreen)
-			n++;
-	if (n == 0)
-		return;
-
-	if (smartgaps == n) {
-		oe = 0; // outer gaps disabled
-	}
-
-	if (n > m->nmaster)
-		mw = m->nmaster ? (int)roundf((m->w.width + m->gappiv*ie) * m->mfact) : 0;
-	else
-		mw = m->w.width - 2*m->gappov*oe + m->gappiv*ie;
-	i = 0;
-	my = ty = m->gappoh*oe;
-	wl_list_for_each(c, &clients, link) {
-		if (!VISIBLEON(c, m) || c->isfloating || c->isfullscreen)
-			continue;
-		if (i < m->nmaster) {
-			r = MIN(n, m->nmaster) - i;
-			h = (m->w.height - my - m->gappoh*oe - m->gappih*ie * (r - 1)) / r;
-			resize(c, (struct wlr_box){.x = m->w.x + m->gappov*oe, .y = m->w.y + my,
-				.width = mw - m->gappiv*ie, .height = h}, 0);
-			my += c->geom.height + m->gappih*ie;
-		} else {
-			r = n - i;
-			h = (m->w.height - ty - m->gappoh*oe - m->gappih*ie * (r - 1)) / r;
-			resize(c, (struct wlr_box){.x = m->w.x + mw + m->gappov*oe, .y = m->w.y + ty,
-				.width = m->w.width - mw - 2*m->gappov*oe, .height = h}, 0);
-			ty += c->geom.height + m->gappih*ie;
-		}
-		i++;
-	}
+	view(&(Arg){.ui = sel->tags});
 }
 
 void
