@@ -1838,15 +1838,15 @@ client_in_direction(const char *direction, int skipfloating)
 	Vector spos;
 	double bestdist = INFINITY;
 
-	if (!sel || sel->isfullscreen || (skipfloating && sel->isfloating))
+	if (!sel || (skipfloating && sel->isfloating))
 		return NULL;
-	spos = position_of_box(&sel->geom);
+	spos = position_of_box(sel->isfullscreen ? &sel->prev : &sel->geom);
 	wl_list_for_each(c, &clients, link) {
 		Vector diff;
 		double dist;
 		if (c == sel || !VISIBLEON(c, selmon) || (skipfloating && c->isfloating))
 			continue;
-		diff = diff_of_vectors(spos, position_of_box(&c->geom));
+		diff = diff_of_vectors(spos, position_of_box(c->isfullscreen ? &c->prev : &c->geom));
 		if (strcmp(direction, direction_of_vector(diff)) != 0)
 			continue;
 		dist = hypot(diff.x, diff.y);
@@ -1885,8 +1885,15 @@ focusdir(const Arg *arg)
 
 	if (arg->ui >= LENGTH(directions))
 		return;
-	if ((target = client_in_direction(directions[arg->ui], 0)))
+	if ((target = client_in_direction(directions[arg->ui], 0))) {
+		Client *sel = focustop(selmon);
+		int fullscreen = sel && sel->isfullscreen;
+		if (fullscreen)
+			setfullscreen(sel, 0);
+		if (fullscreen && !target->isfullscreen)
+			setfullscreen(target, 1);
 		focusclient(target, 1);
+	}
 }
 
 static void
