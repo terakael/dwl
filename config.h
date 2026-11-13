@@ -126,11 +126,11 @@ static const char *bluetoothcmd[] = { "footclient", "bluetui", NULL };
 static const char *screenshotcmd[] = { "/bin/sh", "-c", "grim -g \"$(slurp)\" - | wl-copy", NULL };
 static const char *menucmd[] = { "fuzzel", NULL };
 static const char *filecmd[] = { "nautilus", NULL };
-static const char *browsercmd[] = { "zen-browser", NULL };
-static const char *mailcmd[] = { "zen-browser", "https://mail.proton.me", NULL };
-static const char *photocmd[] = { "zen-browser", "https://photos.intur.nl", NULL };
-static const char *whatsappcmd[] = { "zen-browser", "https://web.whatsapp.com", NULL };
-static const char *browserprivcmd[] = { "zen-browser", "--private-window", NULL };
+static const char *browsercmd[] = { "brave", NULL };
+static const char *mailcmd[] = { "brave", "--app=https://mail.proton.me", NULL };
+static const char *photocmd[] = { "brave", "--app=https://photos.intur.nl", NULL };
+static const char *whatsappcmd[] = { "brave", "--app=https://web.whatsapp.com", NULL };
+static const char *browserprivcmd[] = { "brave", "--incognito", NULL };
 static const char *lockcmd[] = { "/bin/sh", "-c", "$HOME/.local/bin/lock", NULL };
 
 enum { NORMAL = -1, VOLUME };
